@@ -165,6 +165,36 @@ public class SumStateHandler implements Handler<SumStateMessage> {
 		}
 	}
 
+	protected void addOrUpdate(Edge edge, Level sumState) {
+    final var oldMsg = this.msgScheduler.remove(edge.getId());
+
+    // if the edage is not in a faulted state and has no old messages, it returns directly.
+    if (oldMsg == null && !this.faultSince.containsKey(edge.getId())) {
+        return;
+    }
+
+    try {
+        SumStateMessage message;
+        if (oldMsg != null) {
+            // update an existing message
+            if (oldMsg.getSumState() != sumState) {
+                oldMsg.setSumState(sumState, this.timeService.now());
+            }
+            message = oldMsg;
+        } else {
+            // create new message
+            message = this.getEdgeMessage(edge, sumState);
+        }
+
+        // scheduling valid messages
+        if (message != null && !message.isEmpty()) {
+            this.msgScheduler.schedule(message);
+        }
+    } catch (OpenemsException ex) {
+        this.log.warn("Failed to process edge {}: {}", edge.getId(), ex.getMessage());
+    }
+	}
+
 	private void handleEdgeOnSetOnline(EventReader event) {
 		final var edgeId = event.getString(Edge.Events.OnSetOnline.EDGE_ID);
 		final var online = event.getBoolean(Edge.Events.OnSetOnline.IS_ONLINE);
